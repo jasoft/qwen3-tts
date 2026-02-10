@@ -174,8 +174,22 @@ async def generate_speech(
         Tuple of (audio_array, sample_rate)
     """
     backend = await get_tts_backend()
-    
-    # Map voice name
+
+    # Check custom voice BEFORE applying OpenAI alias mapping,
+    # so custom voices with OpenAI alias names remain accessible.
+    if backend.is_custom_voice(voice):
+        try:
+            audio, sr = await backend.generate_speech_with_custom_voice(
+                text=text,
+                voice=voice,
+                language=language,
+                speed=speed,
+            )
+            return audio, sr
+        except Exception as e:
+            raise RuntimeError(f"Speech generation failed: {e}")
+
+    # Map voice name (OpenAI aliases to internal names)
     voice_name = get_voice_name(voice)
     
     # Generate speech using the backend
@@ -336,18 +350,26 @@ async def list_voices():
         if speakers:
             voices = []
             for speaker in speakers:
+                if backend.is_custom_voice(speaker):
+                    description = f"Custom cloned voice: {speaker}"
+                else:
+                    description = f"Qwen3-TTS voice: {speaker}"
                 voice_info = VoiceInfo(
                     id=speaker,
                     name=speaker,
                     language=languages[0] if languages else "Auto",
-                    description=f"Qwen3-TTS voice: {speaker}",
+                    description=description,
                 )
                 voices.append(voice_info.model_dump())
         else:
             voices = [v.model_dump() for v in default_voices]
         
+        # OpenAI aliases map to built-in speakers; skip them on Base models
+        if backend.get_model_type() != "base":
+            voices += [v.model_dump() for v in openai_voices]
+
         return {
-            "voices": voices + [v.model_dump() for v in openai_voices],
+            "voices": voices,
             "languages": languages if languages else default_languages,
         }
         
