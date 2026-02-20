@@ -453,11 +453,8 @@
 
                         <div class="form-group">
                             <label for="model">Model</label>
-                            <select id="model">
-                                <option value="qwen3-tts">qwen3-tts</option>
-                                <option value="tts-1">tts-1</option>
-                                <option value="tts-1-hd">tts-1-hd</option>
-                            </select>
+                            <select id="model"></select>
+                            <small id="modelDetails" style="color: #888; font-size: 11px; margin-top: 6px; display: block;"></small>
                         </div>
                     </div>
 
@@ -502,6 +499,21 @@
                             <input type="range" id="speed" min="0.25" max="4.0" step="0.05" value="1.0">
                         </div>
                     </div>
+
+                    <details style="margin-bottom: 15px;">
+                        <summary style="color: #00ff88; cursor: pointer;">Advanced text normalization options</summary>
+                        <div style="margin-top: 10px; display: grid; gap: 8px;">
+                            <label><input type="checkbox" id="normalize" checked> Enable normalization</label>
+                            <label><input type="checkbox" id="unitNormalization" checked> Unit normalization</label>
+                            <label><input type="checkbox" id="urlNormalization" checked> URL normalization</label>
+                            <label><input type="checkbox" id="emailNormalization" checked> Email normalization</label>
+                            <label><input type="checkbox" id="phoneNormalization" checked> Phone normalization</label>
+                            <label><input type="checkbox" id="optionalPluralizationNormalization" checked> Optional pluralization normalization</label>
+                            <label><input type="checkbox" id="replaceRemainingSymbols" checked> Replace remaining symbols</label>
+                        </div>
+                    </details>
+
+                    <div id="modelTypeInfo" style="margin-bottom: 15px; color: #888; font-size: 12px;"></div>
 
                     <button type="submit" class="btn" id="generateBtn">
                         <span class="btn-text">▶ Generate Speech</span>
@@ -760,6 +772,15 @@ response.<span class="function">stream_to_file</span>(<span class="string">"outp
                         speed: parseFloat(speedSlider.value),
                         language: document.getElementById('language').value,
                         instruct: document.getElementById('instruct').value.trim() || null,
+                        normalization_options: {
+                            normalize: document.getElementById('normalize').checked,
+                            unit_normalization: document.getElementById('unitNormalization').checked,
+                            url_normalization: document.getElementById('urlNormalization').checked,
+                            email_normalization: document.getElementById('emailNormalization').checked,
+                            optional_pluralization_normalization: document.getElementById('optionalPluralizationNormalization').checked,
+                            phone_normalization: document.getElementById('phoneNormalization').checked,
+                            replace_remaining_symbols: document.getElementById('replaceRemainingSymbols').checked,
+                        },
                     }),
                 });
 
@@ -804,7 +825,13 @@ response.<span class="function">stream_to_file</span>(<span class="string">"outp
                     data.voices.forEach(voice => {
                         const option = document.createElement('option');
                         option.value = voice.id;
-                        option.textContent = voice.name + (voice.description ? ` - ${voice.description}` : '');
+                        let voiceTypeLabel = 'Qwen3 voice';
+                        if ((voice.description || '').toLowerCase().includes('custom cloned voice')) {
+                            voiceTypeLabel = 'Custom voice';
+                        } else if ((voice.description || '').toLowerCase().includes('openai-compatible')) {
+                            voiceTypeLabel = 'OpenAI alias';
+                        }
+                        option.textContent = `${voice.name} [${voiceTypeLabel}]` + (voice.description ? ` - ${voice.description}` : '');
                         voiceSelect.appendChild(option);
                     });
 
@@ -840,10 +867,28 @@ response.<span class="function">stream_to_file</span>(<span class="string">"outp
                             option.textContent = model.id;
                             modelSelect.appendChild(option);
                         });
+                        await loadSelectedModelDetails();
                     }
                 }
             } catch (error) {
                 console.log('Could not load models from API:', error);
+            }
+        }
+
+        async function loadSelectedModelDetails() {
+            const modelSelect = document.getElementById('model');
+            const modelDetails = document.getElementById('modelDetails');
+            if (!modelSelect.value) return;
+            try {
+                const response = await fetch(`/v1/models/${encodeURIComponent(modelSelect.value)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    modelDetails.textContent = `Owner: ${data.owned_by} • Created: ${new Date(data.created * 1000).toISOString().split('T')[0]}`;
+                } else {
+                    modelDetails.textContent = '';
+                }
+            } catch (error) {
+                modelDetails.textContent = '';
             }
         }
 
@@ -1046,10 +1091,19 @@ response.<span class="function">stream_to_file</span>(<span class="string">"outp
         async function checkVoiceCloneCapabilities() {
             const capInfo = document.getElementById('voiceCloneCapInfo');
             const cloneForm = document.getElementById('voiceCloneForm');
+            const modelTypeInfo = document.getElementById('modelTypeInfo');
             try {
                 const response = await fetch('/v1/audio/voice-clone/capabilities');
                 if (response.ok) {
                     const data = await response.json();
+                    const modelType = data.model_type || 'unknown';
+                    if (modelType === 'base') {
+                        modelTypeInfo.innerHTML = 'Backend model type: <strong>base</strong> — supports voice cloning plus base and custom cloned voices.';
+                    } else if (modelType === 'customvoice') {
+                        modelTypeInfo.innerHTML = 'Backend model type: <strong>customvoice</strong> — optimized for custom voices, voice cloning API is unavailable.';
+                    } else {
+                        modelTypeInfo.innerHTML = `Backend model type: <strong>${modelType}</strong> — capabilities vary by backend model.`;
+                    }
                     if (data.supported) {
                         let modesHtml = '';
                         if (data.icl_mode_available) {
@@ -1105,11 +1159,13 @@ response.<span class="function">stream_to_file</span>(<span class="string">"outp
                         cloneForm.style.display = 'none';
                     }
                 } else {
+                    modelTypeInfo.textContent = 'Could not determine backend model type.';
                     capInfo.innerHTML = '<p style="color: #ff3232; font-size: 13px;">Could not check voice cloning capabilities.</p>';
                     cloneForm.style.display = 'none';
                 }
             } catch (error) {
                 console.log('Voice cloning not available:', error);
+                modelTypeInfo.textContent = 'Voice/model capability status unavailable. Server may still be starting.';
                 capInfo.innerHTML = '<p style="color: #888; font-size: 13px;">Voice cloning status unavailable. Server may still be starting.</p>';
                 cloneForm.style.display = 'none';
             }
@@ -1117,6 +1173,7 @@ response.<span class="function">stream_to_file</span>(<span class="string">"outp
 
         // Check voice clone capabilities on page load
         checkVoiceCloneCapabilities();
+        document.getElementById('model').addEventListener('change', loadSelectedModelDetails);
     </script>
 </body>
 </html>
