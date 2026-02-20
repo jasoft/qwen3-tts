@@ -111,6 +111,26 @@ response = client.audio.speech.create(
 response.stream_to_file("output.mp3")
 ```
 
+### Current Qwen3-TTS task split and endpoint mapping
+
+Qwen3-TTS model families map to distinct characteristics:
+
+- **CustomVoice**: preset speakers + style instruction control
+- **VoiceDesign**: free-form voice design from natural-language instructions
+- **Base**: reference-audio voice cloning (`ref_audio`, optional `ref_text` in x-vector-only mode)
+
+In this FastAPI wrapper, the primary generation endpoint remains:
+
+- `POST /v1/audio/speech` (OpenAI-compatible request body with extensions like `language`, `instruct`, normalization options)
+
+Voice cloning is exposed as a dedicated endpoint:
+
+- `POST /v1/audio/voice-clone` (`ref_audio`, `ref_text`, `x_vector_only_mode`, `language`, `response_format`, `speed`)
+
+Voice listing is available via:
+
+- `GET /v1/audio/voices` (alias: `/v1/voices`)
+
 ### Health Check
 
 Check backend status:
@@ -329,6 +349,7 @@ docker-compose --profile vllm down
 ## Notes
 
 - **True Streaming**: Neither backend supports true audio streaming over HTTP currently. Both use OpenWebUI's chunk-based approach.
+- **UI Behavior**: For vLLM-Omni online serving, treat requests as non-streaming and show a processing state until the full audio response is returned.
 - **Chunk Streaming**: Long text is split into chunks, each processed as a separate TTS request.
 - **Production Use**: vLLM backend is suitable for production but test thoroughly in your environment first.
 - **Model Updates**: As vLLM-Omni and Qwen3-TTS evolve, check for updates to both packages.
