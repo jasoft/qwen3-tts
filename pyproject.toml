@@ -22,6 +22,7 @@ authors = [{ name = "Alibaba Qwen Team" }]
 dependencies = [
   "transformers==4.57.3",
   "accelerate==1.12.0",
+  "PyYAML>=6.0",
   "gradio",
   "librosa",
   "torchaudio",

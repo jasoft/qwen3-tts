@@ -28,6 +28,7 @@ This repository provides an **OpenAI-compatible FastAPI server** for **Qwen3-TTS
 - ⚡ **GPU-Accelerated** - Optimized for CUDA/GPU and CPU deployments
 - 🔧 **Text Sanitization** - Advanced text preprocessing for URLs, emails, special characters
 - 🐳 **Docker Ready** - Multi-stage Dockerfile with GPU and CPU variants
+- 🟥 **ROCm Ready** - Optional AMD ROCm Dockerfile and Compose profile for the optimized backend
 - 🖥️ **Web Interface** - Dark-themed interactive demo UI
 - 🎙️ **Voice Studio** - Comprehensive UI for creating, managing, and exporting voice profiles
 - 🔄 **Real-Time Streaming** - True token-by-token PCM streaming (optimized backend)
@@ -400,6 +401,30 @@ docker run --gpus all -p 8880:8880 \
 # Or use Docker Compose
 docker-compose --profile vllm up qwen3-tts-vllm
 ```
+
+**AMD ROCm Optimized Backend:**
+
+```bash
+# Build and run the optional ROCm image
+docker build -f Dockerfile.rocm -t qwen3-tts-api:rocm .
+docker run \
+  --device /dev/kfd \
+  --device /dev/dri \
+  --group-add video \
+  --group-add render \
+  --security-opt seccomp=unconfined \
+  -p 8880:8880 \
+  -v "$(pwd)/config.yaml:/root/qwen3-tts/config.yaml:ro" \
+  -v "$(pwd)/voice_library:/root/qwen3-tts/voice_library" \
+  qwen3-tts-api:rocm
+
+# Or use Docker Compose
+docker compose -f docker-compose.rocm.yml up qwen3-tts-rocm
+```
+
+The ROCm image applies the AMD-specific tuning from the analyzed fork
+(`FLASH_ATTENTION_TRITON_AMD_ENABLE`, hipBLASLt preference, TunableOp, and
+`GPU_MAX_HW_QUEUES=1`) without changing the default CUDA/CPU deployment paths.
 
 ### Option 3: Using Docker (CPU-Only)
 
