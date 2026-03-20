@@ -19,8 +19,9 @@ services:
       - ./voice_library:/root/qwen3-tts/voice_library
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface
     devices:
-      - /dev/kfd
-      - /dev/dri
+      - /dev/kfd:/dev/kfd
+      # Adjust renderD128 if your AMD GPU exposes a different render node.
+      - /dev/dri/renderD128:/dev/dri/renderD128
     group_add:
       - video
       - render

@@ -409,7 +409,7 @@ docker-compose --profile vllm up qwen3-tts-vllm
 docker build -f Dockerfile.rocm -t qwen3-tts-api:rocm .
 docker run \
   --device /dev/kfd \
-  --device /dev/dri \
+  --device /dev/dri/renderD128 \
   --group-add video \
   --group-add render \
   --security-opt seccomp=unconfined \
@@ -425,6 +425,8 @@ docker compose -f docker-compose.rocm.yml up qwen3-tts-rocm
 The ROCm image applies the AMD-specific tuning from the analyzed fork
 (`FLASH_ATTENTION_TRITON_AMD_ENABLE`, hipBLASLt preference, TunableOp, and
 `GPU_MAX_HW_QUEUES=1`) without changing the default CUDA/CPU deployment paths.
+If your system uses a different AMD render node than `/dev/dri/renderD128`,
+adjust the `docker run` / `docker compose` device mapping accordingly.
 
 ### Option 3: Using Docker (CPU-Only)
 

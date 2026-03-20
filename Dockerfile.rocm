@@ -21,8 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel ninja packaging
 
 # Install flash attention from source for ROCm/Triton
+ARG FLASH_ATTN_REF=v2.8.3
 RUN cd /tmp && \
-    git clone --depth 1 https://github.com/Dao-AILab/flash-attention.git && \
+    git clone --depth 1 --branch "${FLASH_ATTN_REF}" https://github.com/Dao-AILab/flash-attention.git && \
     cd flash-attention && \
     FLASH_ATTENTION_TRITON_AMD_ENABLE=TRUE pip install . --no-build-isolation && \
     cd / && rm -rf /tmp/flash-attention
@@ -56,7 +57,7 @@ ENV FLASH_ATTENTION_TRITON_AMD_ENABLE=TRUE \
 
 EXPOSE 8880
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:8880/health || exit 1
 
 CMD ["python", "-m", "api.main"]
