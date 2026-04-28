@@ -28,8 +28,10 @@ import sounddevice as sd
 
 
 ROOT = Path(__file__).resolve().parent
-LOG_FILE = ROOT / ".qwen-tts-fast.log"
-PID_FILE = ROOT / ".qwen-tts-fast.pid"
+CACHE_DIR = Path.home() / ".cache" / "qwen-tts-fast"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+PID_FILE = CACHE_DIR / "daemon.pid"
+LOG_FILE = CACHE_DIR / "daemon.log"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 DEFAULT_MODEL = "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-6bit"
@@ -197,14 +199,20 @@ class TTSHandler(BaseHTTPRequestHandler):
 def run_daemon(host: str, port: int, model_id: str) -> None:
     global MODEL_ID
     MODEL_ID = model_id
+
+    def _shutdown_handler(signum, frame):
+        print(f"Received signal {signum}, shutting down...", flush=True)
+        PID_FILE.unlink(missing_ok=True)
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
+
     get_model()
     PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
     server = HTTPServer((host, port), TTSHandler)
     print(f"Serving qwen-tts-fast on {base_url(host, port)}", flush=True)
-    try:
-        server.serve_forever()
-    finally:
-        PID_FILE.unlink(missing_ok=True)
+    server.serve_forever()
 
 
 def health(host: str, port: int) -> dict[str, Any] | None:
@@ -270,6 +278,18 @@ def stop_daemon() -> None:
         PID_FILE.unlink(missing_ok=True)
         print("not running")
         return
+    for _ in range(20):
+        time.sleep(0.1)
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+    else:
+        try:
+            os.kill(pid, signal.SIGKILL)
+            time.sleep(0.5)
+        except ProcessLookupError:
+            pass
     PID_FILE.unlink(missing_ok=True)
     print(f"stopped daemon pid={pid}")
 
