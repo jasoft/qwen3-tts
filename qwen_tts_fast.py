@@ -54,6 +54,8 @@ LANG_CODES = {
 MODEL = None
 MODEL_ID = DEFAULT_MODEL
 GENERATE_LOCK = Lock()
+LAST_REQUEST_TIME = time.monotonic()
+IDLE_TIMEOUT = 0  # 0 means disabled
 
 
 def base_url(host: str, port: int) -> str:
@@ -122,10 +124,12 @@ class TTSHandler(BaseHTTPRequestHandler):
         self.send_json(404, {"error": "not_found"})
 
     def do_POST(self) -> None:
+        global LAST_REQUEST_TIME
         if self.path != "/speak":
             self.send_json(404, {"error": "not_found"})
             return
 
+        LAST_REQUEST_TIME = time.monotonic()
         headers_sent = False
         try:
             req = self.read_json()
@@ -196,9 +200,20 @@ class TTSHandler(BaseHTTPRequestHandler):
                 self.send_json(500, {"error": str(exc)})
 
 
-def run_daemon(host: str, port: int, model_id: str) -> None:
-    global MODEL_ID
+def watchdog(timeout: float) -> None:
+    while True:
+        time.sleep(min(timeout / 2, 30))
+        elapsed = time.monotonic() - LAST_REQUEST_TIME
+        if elapsed > timeout:
+            print(f"Idle timeout ({elapsed:.0f}s > {timeout}s), shutting down...", flush=True)
+            PID_FILE.unlink(missing_ok=True)
+            os._exit(0)
+
+
+def run_daemon(host: str, port: int, model_id: str, idle_timeout: float = 0) -> None:
+    global MODEL_ID, IDLE_TIMEOUT
     MODEL_ID = model_id
+    IDLE_TIMEOUT = idle_timeout
 
     def _shutdown_handler(signum, frame):
         print(f"Received signal {signum}, shutting down...", flush=True)
@@ -210,6 +225,12 @@ def run_daemon(host: str, port: int, model_id: str) -> None:
 
     get_model()
     PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+
+    if idle_timeout > 0:
+        t = __import__("threading").Thread(target=watchdog, args=(idle_timeout,), daemon=True)
+        t.start()
+        print(f"Idle watchdog enabled: {idle_timeout}s", flush=True)
+
     server = HTTPServer((host, port), TTSHandler)
     print(f"Serving qwen-tts-fast on {base_url(host, port)}", flush=True)
     server.serve_forever()
@@ -224,7 +245,7 @@ def health(host: str, port: int) -> dict[str, Any] | None:
         return None
 
 
-def start_daemon(host: str, port: int, model_id: str, timeout: float) -> None:
+def start_daemon(host: str, port: int, model_id: str, timeout: float, idle_timeout: float) -> None:
     if health(host, port):
         return
 
@@ -240,6 +261,8 @@ def start_daemon(host: str, port: int, model_id: str, timeout: float) -> None:
         str(port),
         "--model",
         model_id,
+        "--idle-timeout",
+        str(idle_timeout),
     ]
     subprocess.Popen(
         cmd,
@@ -355,6 +378,8 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--start-timeout", type=float, default=45.0)
+    parser.add_argument("--idle-timeout", type=float, default=0,
+                        help="Shut down after N seconds of inactivity (0=disabled)")
     parser.add_argument("--no-auto-start", action="store_true")
     parser.add_argument("--status", action="store_true")
     parser.add_argument("--stop", action="store_true")
@@ -362,7 +387,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.daemon:
-        run_daemon(args.host, args.port, args.model)
+        run_daemon(args.host, args.port, args.model, args.idle_timeout)
         return 0
 
     if args.stop:
@@ -385,7 +410,7 @@ def main() -> int:
         parser.error("Please provide text to speak.")
 
     if not args.no_auto_start:
-        start_daemon(args.host, args.port, args.model, args.start_timeout)
+        start_daemon(args.host, args.port, args.model, args.start_timeout, args.idle_timeout)
     elif not health(args.host, args.port):
         raise RuntimeError("daemon is not running")
 
