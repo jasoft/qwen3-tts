@@ -1,33 +1,15 @@
+.venv/
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-.idea/
-.vscode/
-venv/
-env/
-.venv/
-.python-version
+dist/
+build/
 uv.lock
+.DS_Store
 
-# Audio output files
-output/
+.qwen-tts-fast.log
+.qwen-tts-fast.pid
+
 *.wav
 *.mp3
 *.flac
@@ -35,7 +17,3 @@ output/
 *.m4a
 *.aac
 *.opus
-
-
-# LLM infra
-CLAUDE.md
