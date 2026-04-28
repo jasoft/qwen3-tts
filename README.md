@@ -56,6 +56,14 @@ qwen-tts --status
 qwen-tts --stop
 ```
 
+空闲超时自动卸载（类似 LM Studio 行为）：
+
+```bash
+qwen-tts "你好" --idle-timeout 1800
+```
+
+daemon 在空闲 1800 秒（30 分钟）后自动退出并释放模型内存。每次请求会重置空闲计时器。设为 0（默认）则禁用自动卸载。
+
 从 stdin 读取文本：
 
 ```bash
@@ -108,8 +116,8 @@ qwen-tts "你好" --model mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-6bit
 
 - `qwen_tts_fast.py` — 全部逻辑：CLI、后台 daemon、MLX 模型加载和音频播放
 - `pyproject.toml` — 项目依赖与 `qwen-tts` 命令入口
-- `.qwen-tts-fast.log` — daemon 日志（运行时生成）
-- `.qwen-tts-fast.pid` — daemon 进程号（运行时生成）
+- `~/.cache/qwen-tts-fast/daemon.log` — daemon 日志（运行时生成）
+- `~/.cache/qwen-tts-fast/daemon.pid` — daemon 进程号（运行时生成）
 
 ## 工作原理
 
